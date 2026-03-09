@@ -51,3 +51,14 @@ To keep the project future-proof:
 - Add new exception types and register handlers in `GlobalExceptionHandler`.
 - Add profile-based configs (`application-<profile>.properties`) for local/dev/prod behavior.
 - Add feature modules as separate packages (`controller`, `service`, `repository`, `dto`) to keep boundaries clean.
+
+
+## Frontend dashboard (new)
+- Single-page UI served by Spring Boot static resources (`/`).
+- 2026-inspired glassmorphism design with animated 3D flow/grid/orb background.
+- Integrated with backend APIs to:
+  - create resumes,
+  - create jobs,
+  - list resumes,
+  - trigger resume-to-job matching,
+  - show activity log and KPI cards.
