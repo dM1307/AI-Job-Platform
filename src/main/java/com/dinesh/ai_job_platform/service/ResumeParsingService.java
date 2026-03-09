@@ -1,5 +1,6 @@
 package com.dinesh.ai_job_platform.service;
 
+import com.dinesh.ai_job_platform.exception.FileParsingException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
@@ -16,14 +17,12 @@ public class ResumeParsingService {
     public String extractText(MultipartFile file) {
 
         if (file == null || file.isEmpty()) {
-            throw new RuntimeException("Uploaded file is empty");
+            throw new FileParsingException("Uploaded file is empty");
         }
 
         try (InputStream inputStream = file.getInputStream()) {
 
             AutoDetectParser parser = new AutoDetectParser();
-
-            // -1 removes character limit
             ContentHandler handler = new BodyContentHandler(-1);
 
             Metadata metadata = new Metadata();
@@ -34,13 +33,13 @@ public class ResumeParsingService {
             String text = handler.toString();
 
             if (text == null || text.trim().isEmpty()) {
-                throw new RuntimeException("Unable to extract text from resume");
+                throw new FileParsingException("Unable to extract text from resume");
             }
 
             return text.trim();
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse resume file", e);
+            throw new FileParsingException("Failed to parse resume file", e);
         }
     }
 }

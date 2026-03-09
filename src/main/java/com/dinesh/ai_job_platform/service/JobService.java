@@ -5,6 +5,8 @@ import com.dinesh.ai_job_platform.model.Job;
 import com.dinesh.ai_job_platform.repository.JobRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class JobService {
 
@@ -32,5 +34,9 @@ public class JobService {
         job.setEmbedding(embedding);
 
         return jobRepository.save(job);
+    }
+
+    public List<Job> getAllJobs() {
+        return jobRepository.findAll();
     }
 }

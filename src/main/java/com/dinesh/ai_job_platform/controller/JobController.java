@@ -6,6 +6,8 @@ import com.dinesh.ai_job_platform.service.JobService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/jobs")
 public class JobController {
@@ -20,4 +22,10 @@ public class JobController {
     public Job createJob(@Valid @RequestBody JobRequest request) {
         return jobService.createJob(request);
     }
+
+    @GetMapping
+    public List<Job> getAllJobs() {
+        return jobService.getAllJobs();
+    }
 }
+
