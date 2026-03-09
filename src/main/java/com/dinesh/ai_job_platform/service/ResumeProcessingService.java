@@ -4,7 +4,6 @@ import com.dinesh.ai_job_platform.model.Resume;
 import com.dinesh.ai_job_platform.model.Skill;
 import com.dinesh.ai_job_platform.repository.ResumeRepository;
 import com.dinesh.ai_job_platform.repository.SkillRepository;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -27,6 +26,7 @@ public class ResumeProcessingService {
         this.embeddingService = embeddingService;
     }
 
+    @org.springframework.scheduling.annotation.Async
     public void processResume(Long resumeId) {
 
         System.out.println("Processing resume id: " + resumeId);
@@ -49,8 +49,11 @@ public class ResumeProcessingService {
 
         for (String skillName : skills) {
             String cleanSkill = skillName.trim();
+            if (cleanSkill.isBlank()) {
+                continue;
+            }
 
-            System.out.println("Saving skill: " + skillName);
+            System.out.println("Saving skill: " + cleanSkill);
 
             Skill skill = new Skill();
             skill.setName(cleanSkill);

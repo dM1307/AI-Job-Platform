@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.List;
 
@@ -28,10 +29,16 @@ public class EmbeddingService {
         ResponseEntity<Map> response =
                 restTemplate.postForEntity(url, request, Map.class);
 
-        Map body = restTemplate.postForObject(url, request, Map.class);
+        Map body = response.getBody();
         System.out.println("Embedding raw response: " + body);
 
-        List<Double> embeddingList = (List<Double>) body.get("embedding");
+        List<Double> embeddingList = body == null
+                ? Collections.emptyList()
+                : (List<Double>) body.getOrDefault("embedding", Collections.emptyList());
+
+        if (embeddingList.isEmpty()) {
+            throw new IllegalStateException("Embedding service returned an empty embedding vector");
+        }
 
         float[] embedding = new float[embeddingList.size()];
 
