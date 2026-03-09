@@ -3,11 +3,16 @@ package com.dinesh.ai_job_platform.controller;
 import com.dinesh.ai_job_platform.dto.ResumeRequest;
 import com.dinesh.ai_job_platform.dto.ResumeResponse;
 import com.dinesh.ai_job_platform.model.Job;
-import com.dinesh.ai_job_platform.service.*;
+import com.dinesh.ai_job_platform.service.JobMatchingService;
+import com.dinesh.ai_job_platform.service.ResumeParsingService;
+import com.dinesh.ai_job_platform.service.ResumeService;
+import com.dinesh.ai_job_platform.service.SkillService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/resumes")
@@ -17,24 +22,21 @@ public class ResumeController {
     private final JobMatchingService jobMatchingService;
     private final SkillService skillService;
     private final ResumeParsingService resumeParsingService;
-    private final ResumeProcessingService resumeProcessingService;
 
     public ResumeController(
             ResumeService resumeService,
             JobMatchingService jobMatchingService,
             SkillService skillService,
-            ResumeParsingService resumeParsingService,
-            ResumeProcessingService resumeProcessingService) {
+            ResumeParsingService resumeParsingService) {
 
         this.resumeService = resumeService;
         this.jobMatchingService = jobMatchingService;
         this.skillService = skillService;
         this.resumeParsingService = resumeParsingService;
-        this.resumeProcessingService = resumeProcessingService;
     }
 
     @PostMapping
-    public ResumeResponse createResume(@RequestBody ResumeRequest request) {
+    public ResumeResponse createResume(@Valid @RequestBody ResumeRequest request) {
         return resumeService.createResume(request);
     }
 
@@ -44,20 +46,15 @@ public class ResumeController {
         String text = resumeParsingService.extractText(file);
 
         ResumeRequest request = new ResumeRequest();
-        request.setCandidateName(file.getOriginalFilename());
-        request.setEmail("unknown@example.com");
+        request.setCandidateName(file.getOriginalFilename() == null ? "uploaded-resume" : file.getOriginalFilename());
+        request.setEmail("uploaded-" + UUID.randomUUID() + "@example.com");
         request.setRawText(text);
 
-        ResumeResponse resume = resumeService.createResume(request);
-
-        resumeProcessingService.processResume(resume.getId());
-
-        return resume;
+        return resumeService.createResume(request);
     }
 
     @GetMapping
     public List<ResumeResponse> getAllResumes() {
-        System.out.println("Controller hit");
         return resumeService.getAllResumes();
     }
 

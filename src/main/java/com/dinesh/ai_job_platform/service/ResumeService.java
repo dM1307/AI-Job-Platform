@@ -9,7 +9,6 @@ import com.dinesh.ai_job_platform.repository.ResumeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ResumeService {
@@ -28,13 +27,12 @@ public class ResumeService {
     public ResumeResponse createResume(ResumeRequest request) {
 
         Resume resume = new Resume();
-        resume.setCandidateName(request.getCandidateName());
-        resume.setEmail(request.getEmail());
-        resume.setRawText(request.getRawText());
+        resume.setCandidateName(request.getCandidateName().trim());
+        resume.setEmail(request.getEmail().trim().toLowerCase());
+        resume.setRawText(request.getRawText().trim());
 
         Resume saved = resumeRepository.save(resume);
 
-        // 🚀 trigger async AI processing
         processingService.processResume(saved.getId());
 
         return mapToResponse(saved);
@@ -51,11 +49,8 @@ public class ResumeService {
     }
 
     public List<ResumeResponse> getAllResumes() {
-        System.out.println("Service started");
 
         List<Resume> resumes = resumeRepository.findAllWithSkills();
-
-        System.out.println("Resumes fetched: " + resumes.size());
 
         return resumes.stream()
                 .map(this::mapToResponse)
@@ -75,8 +70,6 @@ public class ResumeService {
                 .map(Skill::getName)
                 .toList();
 
-        System.out.println("Mapping resume: " + resume.getId());
-        System.out.println("Skills: " + resume.getSkills().size());
         response.setSkills(skills);
 
         return response;

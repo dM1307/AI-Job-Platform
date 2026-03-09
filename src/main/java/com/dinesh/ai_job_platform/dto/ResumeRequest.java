@@ -1,9 +1,18 @@
 package com.dinesh.ai_job_platform.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
 public class ResumeRequest {
 
+    @NotBlank(message = "Candidate name is required")
     private String candidateName;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Email format is invalid")
     private String email;
+
+    @NotBlank(message = "Resume content is required")
     private String rawText;
 
     public ResumeRequest() {}
