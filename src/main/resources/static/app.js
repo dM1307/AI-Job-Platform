@@ -10,6 +10,7 @@ const kpiResumes = document.getElementById('kpiResumes');
 const kpiJobs = document.getElementById('kpiJobs');
 const kpiMatches = document.getElementById('kpiMatches');
 
+
 function log(message) {
     const li = document.createElement('li');
     li.textContent = `${new Date().toLocaleTimeString()} — ${message}`;
@@ -39,10 +40,7 @@ async function request(path, options = {}) {
 
 async function refresh() {
     try {
-        const [resumes, jobs] = await Promise.all([
-            request('/api/resumes'),
-            fetch('/api/jobs', { method: 'GET' }).then(async r => r.ok ? r.json() : [])
-        ]);
+        const [resumes, jobs] = await Promise.all([request('/api/resumes'), request('/api/jobs')]);
 
         kpiResumes.textContent = resumes.length;
         kpiJobs.textContent = Array.isArray(jobs) ? jobs.length : 0;
@@ -53,14 +51,32 @@ async function refresh() {
         resumes.forEach((resume) => {
             const card = document.createElement('div');
             card.className = 'item';
-            card.innerHTML = `
-                <strong>${resume.candidateName}</strong><br/>
-                <small>${resume.email}</small><br/>
-                <small>Skills: ${(resume.skills || []).join(', ') || '—'}</small>
-                <div class="item-actions">
-                  <button data-id="${resume.id}" class="match-btn">Match Jobs</button>
-                </div>
-            `;
+
+            const nameEl = document.createElement('strong');
+            nameEl.textContent = resume.candidateName ?? 'Unknown Candidate';
+
+            const emailEl = document.createElement('small');
+            emailEl.textContent = resume.email ?? '—';
+
+            const skillsEl = document.createElement('small');
+            skillsEl.textContent = `Skills: ${(resume.skills || []).join(', ') || '—'}`;
+
+            const actions = document.createElement('div');
+            actions.className = 'item-actions';
+
+            const matchButton = document.createElement('button');
+            matchButton.className = 'match-btn';
+            matchButton.setAttribute('data-id', String(resume.id));
+            matchButton.type = 'button';
+            matchButton.textContent = 'Match Jobs';
+
+            actions.appendChild(matchButton);
+            card.appendChild(nameEl);
+            card.appendChild(document.createElement('br'));
+            card.appendChild(emailEl);
+            card.appendChild(document.createElement('br'));
+            card.appendChild(skillsEl);
+            card.appendChild(actions);
             resumeList.appendChild(card);
         });
 
