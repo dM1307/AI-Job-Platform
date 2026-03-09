@@ -1,7 +1,11 @@
 package com.dinesh.ai_job_platform.service;
 
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
@@ -19,13 +23,13 @@ public class AiService {
 
         String prompt = """
         Extract only technical skills from the following resume.
-        
+
         Rules:
         - Return ONLY a comma separated list.
         - Do NOT include any explanation.
         - Do NOT include sentences.
         - Only skill names.
-        
+
         Resume:
         """ + resumeText;
 
@@ -42,24 +46,25 @@ public class AiService {
 
         String url = "http://localhost:11434/api/generate";
 
-        ResponseEntity<Map> response =
-                restTemplate.postForEntity(url, entity, Map.class);
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+            Map responseBody = response.getBody();
+            String result = responseBody == null ? null : (String) responseBody.get("response");
 
-        Map responseBody = response.getBody();
-        String result = responseBody == null ? null : (String) responseBody.get("response");
+            if (result == null || result.isBlank()) {
+                return "";
+            }
 
-        if (result == null || result.isBlank()) {
-            return "";
+            result = result.replace("\n", " ").trim();
+
+
+            if (result.toLowerCase().startsWith("skills:")) {
+                result = result.substring("skills:".length()).trim();
+            }
+
+            return result;
+        } catch (RestClientException ex) {
+            throw new IllegalStateException("Failed to extract skills from AI service", ex);
         }
-
-// clean formatting
-        result = result.replace("\n", " ").trim();
-
-// remove explanation text if present
-        if (result.toLowerCase().startsWith("skills:")) {
-            result = result.substring("skills:".length()).trim();
-        }
-
-        return result;
     }
 }

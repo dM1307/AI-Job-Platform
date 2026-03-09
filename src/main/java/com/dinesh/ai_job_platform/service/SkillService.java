@@ -17,6 +17,6 @@ public class SkillService {
     }
 
     public void deleteSkillsByResume(Long resumeId) {
-        skillRepository.deleteByResumeId(resumeId);
+        skillRepository.deleteByResume_Id(resumeId);
     }
 }

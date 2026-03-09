@@ -3,6 +3,7 @@ package com.dinesh.ai_job_platform.controller;
 import com.dinesh.ai_job_platform.dto.JobRequest;
 import com.dinesh.ai_job_platform.model.Job;
 import com.dinesh.ai_job_platform.service.JobService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -16,8 +17,7 @@ public class JobController {
     }
 
     @PostMapping
-    public Job createJob(@RequestBody JobRequest request) {
-
+    public Job createJob(@Valid @RequestBody JobRequest request) {
         return jobService.createJob(request);
     }
 }

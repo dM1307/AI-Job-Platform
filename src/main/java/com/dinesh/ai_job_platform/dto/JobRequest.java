@@ -1,8 +1,13 @@
 package com.dinesh.ai_job_platform.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 public class JobRequest {
 
+    @NotBlank(message = "Job title is required")
     private String title;
+
+    @NotBlank(message = "Job description is required")
     private String description;
 
     public JobRequest() {}
