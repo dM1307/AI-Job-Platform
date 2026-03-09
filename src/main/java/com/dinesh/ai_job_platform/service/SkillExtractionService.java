@@ -1,5 +1,6 @@
 package com.dinesh.ai_job_platform.service;
 
+import com.dinesh.ai_job_platform.exception.ResourceNotFoundException;
 import com.dinesh.ai_job_platform.model.Resume;
 import com.dinesh.ai_job_platform.model.Skill;
 import com.dinesh.ai_job_platform.repository.ResumeRepository;
@@ -34,7 +35,7 @@ public class SkillExtractionService {
     public void extractSkills(Long resumeId) {
 
         Resume resume = resumeRepository.findById(resumeId)
-                .orElseThrow(() -> new RuntimeException("Resume not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Resume not found"));
 
         String aiResponse = aiService.extractSkills(resume.getRawText());
 
