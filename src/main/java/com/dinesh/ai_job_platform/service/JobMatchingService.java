@@ -9,7 +9,9 @@ import com.dinesh.ai_job_platform.repository.ResumeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,6 +37,8 @@ public class JobMatchingService {
         Set<String> candidateSkills = resume.getSkills()
                 .stream()
                 .map(Skill::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .map(name -> name.trim().toLowerCase(Locale.ROOT))
                 .collect(Collectors.toSet());
 
         List<Job> jobs = jobRepository.findAll();
@@ -43,9 +47,13 @@ public class JobMatchingService {
 
         for (Job job : jobs) {
 
-            for (JobSkill jobSkill : job.getRequiredSkills()) {
+            for (JobSkill jobSkill : job.getRequiredSkills() == null
+                    ? Collections.<JobSkill>emptyList()
+                    : job.getRequiredSkills()) {
 
-                if (candidateSkills.contains(jobSkill.getSkillName())) {
+                String requiredSkillName = jobSkill.getSkillName();
+                if (requiredSkillName != null
+                        && candidateSkills.contains(requiredSkillName.trim().toLowerCase(Locale.ROOT))) {
                     matchedJobs.add(job);
                     break;
                 }

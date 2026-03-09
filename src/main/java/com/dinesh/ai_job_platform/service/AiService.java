@@ -40,14 +40,19 @@ public class AiService {
         ResponseEntity<Map> response =
                 restTemplate.postForEntity(url, entity, Map.class);
 
-        String result = (String) response.getBody().get("response");
+        Map responseBody = response.getBody();
+        String result = responseBody == null ? null : (String) responseBody.get("response");
+
+        if (result == null || result.isBlank()) {
+            return "";
+        }
 
 // clean formatting
         result = result.replace("\n", " ").trim();
 
 // remove explanation text if present
-        if (result.contains(":")) {
-            result = result.substring(result.indexOf(":") + 1).trim();
+        if (result.toLowerCase().startsWith("skills:")) {
+            result = result.substring("skills:".length()).trim();
         }
 
         return result;
