@@ -62,8 +62,3 @@ To keep the project future-proof:
   - list resumes,
   - trigger resume-to-job matching,
   - show activity log and KPI cards.
-
-Frontend files:
-- `src/main/resources/static/index.html`
-- `src/main/resources/static/styles.css`
-- `src/main/resources/static/app.js`
