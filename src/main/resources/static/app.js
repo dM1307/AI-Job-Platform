@@ -10,6 +10,15 @@ const kpiResumes = document.getElementById('kpiResumes');
 const kpiJobs = document.getElementById('kpiJobs');
 const kpiMatches = document.getElementById('kpiMatches');
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function log(message) {
     const li = document.createElement('li');
     li.textContent = `${new Date().toLocaleTimeString()} — ${message}`;
@@ -39,10 +48,7 @@ async function request(path, options = {}) {
 
 async function refresh() {
     try {
-        const [resumes, jobs] = await Promise.all([
-            request('/api/resumes'),
-            fetch('/api/jobs', { method: 'GET' }).then(async r => r.ok ? r.json() : [])
-        ]);
+        const [resumes, jobs] = await Promise.all([request('/api/resumes'), request('/api/jobs')]);
 
         kpiResumes.textContent = resumes.length;
         kpiJobs.textContent = Array.isArray(jobs) ? jobs.length : 0;
@@ -53,10 +59,13 @@ async function refresh() {
         resumes.forEach((resume) => {
             const card = document.createElement('div');
             card.className = 'item';
+            const safeName = escapeHtml(resume.candidateName ?? 'Unknown Candidate');
+            const safeEmail = escapeHtml(resume.email ?? '—');
+            const safeSkills = escapeHtml((resume.skills || []).join(', ') || '—');
             card.innerHTML = `
-                <strong>${resume.candidateName}</strong><br/>
-                <small>${resume.email}</small><br/>
-                <small>Skills: ${(resume.skills || []).join(', ') || '—'}</small>
+                <strong>${safeName}</strong><br/>
+                <small>${safeEmail}</small><br/>
+                <small>Skills: ${safeSkills}</small>
                 <div class="item-actions">
                   <button data-id="${resume.id}" class="match-btn">Match Jobs</button>
                 </div>
