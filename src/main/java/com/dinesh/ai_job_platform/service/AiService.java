@@ -18,9 +18,14 @@ public class AiService {
     public String extractSkills(String resumeText) {
 
         String prompt = """
-        Extract the technical skills from the following resume text.
-        Return only a comma separated list.
-
+        Extract only technical skills from the following resume.
+        
+        Rules:
+        - Return ONLY a comma separated list.
+        - Do NOT include any explanation.
+        - Do NOT include sentences.
+        - Only skill names.
+        
         Resume:
         """ + resumeText;
 

@@ -1,18 +1,13 @@
 package com.dinesh.ai_job_platform.service;
 
 import com.dinesh.ai_job_platform.model.Job;
-import com.dinesh.ai_job_platform.model.JobSkill;
 import com.dinesh.ai_job_platform.model.Resume;
 import com.dinesh.ai_job_platform.model.Skill;
 import com.dinesh.ai_job_platform.repository.JobRepository;
 import com.dinesh.ai_job_platform.repository.ResumeRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,13 +15,16 @@ public class JobMatchingService {
 
     private final ResumeRepository resumeRepository;
     private final JobRepository jobRepository;
+    private final EmbeddingService embeddingService;
 
     public JobMatchingService(
             ResumeRepository resumeRepository,
-            JobRepository jobRepository) {
+            JobRepository jobRepository,
+            EmbeddingService embeddingService) {
 
         this.resumeRepository = resumeRepository;
         this.jobRepository = jobRepository;
+        this.embeddingService = embeddingService;
     }
 
     public List<Job> matchJobs(Long resumeId) {
@@ -34,32 +32,16 @@ public class JobMatchingService {
         Resume resume = resumeRepository.findById(resumeId)
                 .orElseThrow(() -> new RuntimeException("Resume not found"));
 
-        Set<String> candidateSkills = resume.getSkills()
+        String resumeText = resume.getRawText();
+
+        String skillsText = resume.getSkills()
                 .stream()
                 .map(Skill::getName)
-                .filter(name -> name != null && !name.isBlank())
-                .map(name -> name.trim().toLowerCase(Locale.ROOT))
-                .collect(Collectors.toSet());
+                .collect(Collectors.joining(" "));
 
-        List<Job> jobs = jobRepository.findAll();
+        float[] resumeEmbedding =
+                embeddingService.generateEmbedding(skillsText);
 
-        List<Job> matchedJobs = new ArrayList<>();
-
-        for (Job job : jobs) {
-
-            for (JobSkill jobSkill : job.getRequiredSkills() == null
-                    ? Collections.<JobSkill>emptyList()
-                    : job.getRequiredSkills()) {
-
-                String requiredSkillName = jobSkill.getSkillName();
-                if (requiredSkillName != null
-                        && candidateSkills.contains(requiredSkillName.trim().toLowerCase(Locale.ROOT))) {
-                    matchedJobs.add(job);
-                    break;
-                }
-            }
-        }
-
-        return matchedJobs;
+        return jobRepository.findSimilarJobs(resumeEmbedding);
     }
 }

@@ -7,6 +7,9 @@ import com.dinesh.ai_job_platform.repository.SkillRepository;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Service
 public class SkillExtractionService {
 
@@ -37,7 +40,20 @@ public class SkillExtractionService {
 
         String[] skills = aiResponse.split(",");
 
+        Set<String> uniqueSkills = new HashSet<>();
+
         for (String skill : skills) {
+
+            String cleaned = skill
+                    .replaceAll("[^a-zA-Z0-9+/# ]", "")
+                    .trim();
+
+            if (!cleaned.isEmpty()) {
+                uniqueSkills.add(cleaned);
+            }
+        }
+
+        for (String skill : uniqueSkills) {
             float[] embedding = embeddingService.generateEmbedding(skill.trim());
 
             Skill skillEntity = new Skill();

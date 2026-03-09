@@ -1,10 +1,10 @@
 package com.dinesh.ai_job_platform.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
+@Table(name = "job")
 public class Job {
 
     @Id
@@ -13,12 +13,20 @@ public class Job {
 
     private String title;
 
-    private String company;
+    @Column(columnDefinition = "TEXT")
+    private String description;
 
-    @OneToMany(mappedBy = "job", cascade = CascadeType.ALL)
-    private List<JobSkill> requiredSkills = new ArrayList<>();
+    @JsonIgnore
+    @Transient
+    @Column(columnDefinition = "vector(768)")
+    private float[] embedding;
 
     public Job() {}
+
+    public Job(String title, String description) {
+        this.title = title;
+        this.description = description;
+    }
 
     public Long getId() {
         return id;
@@ -28,23 +36,23 @@ public class Job {
         return title;
     }
 
-    public String getCompany() {
-        return company;
+    public String getDescription() {
+        return description;
     }
 
-    public List<JobSkill> getRequiredSkills() {
-        return requiredSkills;
+    public float[] getEmbedding() {
+        return embedding;
     }
 
     public void setTitle(String title) {
         this.title = title;
     }
 
-    public void setCompany(String company) {
-        this.company = company;
+    public void setDescription(String description) {
+        this.description = description;
     }
 
-    public void setRequiredSkills(List<JobSkill> requiredSkills) {
-        this.requiredSkills = requiredSkills;
+    public void setEmbedding(float[] embedding) {
+        this.embedding = embedding;
     }
 }
