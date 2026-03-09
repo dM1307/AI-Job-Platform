@@ -1,5 +1,6 @@
 package com.dinesh.ai_job_platform.service;
 
+import com.dinesh.ai_job_platform.exception.ExternalServiceException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -64,7 +65,7 @@ public class AiService {
 
             return result;
         } catch (RestClientException ex) {
-            throw new IllegalStateException("Failed to extract skills from AI service", ex);
+            throw new ExternalServiceException("Failed to extract skills from AI service", ex);
         }
     }
 }
