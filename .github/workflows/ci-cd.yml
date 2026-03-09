@@ -1,0 +1,454 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  NeuralHire — AI Job Platform CI/CD Pipeline
+#  Triggers: push + PR on main/develop
+#  Jobs:
+#    1. lint          — code quality (Checkstyle, ESLint)
+#    2. backend-test  — Maven unit + integration tests
+#    3. frontend-test — Jest unit + coverage
+#    4. e2e           — Playwright end-to-end tests
+#    5. security      — OWASP dependency check + Trivy scan
+#    6. build         — Docker image build & push
+#    7. deploy-staging — deploy to staging (main branch only)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/neuralhire
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ─────────────────────────────────────────────────────
+# JOB 1 — LINT
+# ─────────────────────────────────────────────────────
+jobs:
+  lint:
+    name: 🔍 Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Checkstyle (Java)
+        run: ./mvnw -B checkstyle:check --no-transfer-progress
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: ESLint (Frontend)
+        working-directory: frontend
+        run: npm run lint -- --format github
+        continue-on-error: true   # warn only, don't block PR
+
+# ─────────────────────────────────────────────────────
+# JOB 2 — BACKEND TESTS
+# ─────────────────────────────────────────────────────
+  backend-test:
+    name: 🧪 Backend Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB:       neuralhire_test
+          POSTGRES_USER:     test
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Run unit tests
+        run: ./mvnw -B test -Dspring.profiles.active=test --no-transfer-progress
+        env:
+          SPRING_DATASOURCE_URL:      jdbc:postgresql://localhost:5432/neuralhire_test
+          SPRING_DATASOURCE_USERNAME: test
+          SPRING_DATASOURCE_PASSWORD: test
+
+      - name: Run integration tests
+        run: ./mvnw -B verify -DskipUnitTests=true -Dspring.profiles.active=test --no-transfer-progress
+        env:
+          SPRING_DATASOURCE_URL:      jdbc:postgresql://localhost:5432/neuralhire_test
+          SPRING_DATASOURCE_USERNAME: test
+          SPRING_DATASOURCE_PASSWORD: test
+
+      - name: Publish backend test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name:      Backend Test Results
+          path:      target/surefire-reports/*.xml
+          reporter:  java-junit
+          fail-on-error: false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: target/site/jacoco/jacoco.xml
+          flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload test artifacts
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: backend-test-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────
+# JOB 3 — FRONTEND UNIT TESTS
+# ─────────────────────────────────────────────────────
+  frontend-test:
+    name: 🧪 Frontend Tests (Jest)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run Jest unit tests with coverage
+        working-directory: frontend
+        run: npm run test:ci
+        env:
+          CI: true
+
+      - name: Publish frontend test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name:      Frontend Test Results
+          path:      frontend/junit.xml
+          reporter:  jest-junit
+          fail-on-error: false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          directory: frontend/coverage
+          flags: frontend
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────
+# JOB 4 — E2E TESTS (Playwright)
+# ─────────────────────────────────────────────────────
+  e2e:
+    name: 🎭 E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB:       neuralhire_e2e
+          POSTGRES_USER:     e2e
+          POSTGRES_PASSWORD: e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build backend (skip tests)
+        run: ./mvnw -B package -DskipTests --no-transfer-progress
+
+      - name: Start backend server
+        run: |
+          java -jar target/*.jar \
+            --server.port=8080 \
+            --spring.profiles.active=e2e &
+          echo "Waiting for backend…"
+          for i in {1..30}; do
+            curl -sf http://localhost:8080/actuator/health && break || sleep 2
+          done
+        env:
+          SPRING_DATASOURCE_URL:      jdbc:postgresql://localhost:5432/neuralhire_e2e
+          SPRING_DATASOURCE_USERNAME: e2e
+          SPRING_DATASOURCE_PASSWORD: e2e
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Serve frontend
+        working-directory: frontend
+        run: |
+          npx serve src -l 3000 &
+          sleep 2
+
+      - name: Run Playwright E2E tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          FRONTEND_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+# ─────────────────────────────────────────────────────
+# JOB 5 — SECURITY SCAN
+# ─────────────────────────────────────────────────────
+  security:
+    name: 🔐 Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: OWASP Dependency Check
+        run: ./mvnw -B dependency-check:check
+          -DfailBuildOnCVSS=9
+          -DsuppressionFile=.mvn/owasp-suppressions.xml
+          --no-transfer-progress
+        continue-on-error: true
+
+      - name: Upload OWASP report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owasp-dependency-report
+          path: target/dependency-check-report.html
+          retention-days: 30
+
+      - name: Trivy vulnerability scan (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: '.'
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
+# ─────────────────────────────────────────────────────
+# JOB 6 — BUILD & PUSH DOCKER IMAGE
+# ─────────────────────────────────────────────────────
+  build:
+    name: 🐳 Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.push.outputs.digest }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Build JAR (skip tests — already ran)
+        run: ./mvnw -B package -DskipTests --no-transfer-progress
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            latest
+
+      - name: Build and push image
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Image digest
+        run: echo "Pushed ${{ env.IMAGE_NAME }}@${{ steps.push.outputs.digest }}"
+
+# ─────────────────────────────────────────────────────
+# JOB 7 — DEPLOY TO STAGING
+# ─────────────────────────────────────────────────────
+  deploy-staging:
+    name: 🚀 Deploy → Staging
+    runs-on: ubuntu-latest
+    needs: [build, e2e, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to staging via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key:      ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "📦 Pulling image ${{ needs.build.outputs.image-tag }}"
+            docker pull ${{ needs.build.outputs.image-tag }}
+            docker stop neuralhire-staging || true
+            docker rm   neuralhire-staging || true
+            docker run -d \
+              --name neuralhire-staging \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              -e SPRING_PROFILES_ACTIVE=staging \
+              -e SPRING_DATASOURCE_URL=${{ secrets.STAGING_DB_URL }} \
+              -e SPRING_DATASOURCE_USERNAME=${{ secrets.STAGING_DB_USER }} \
+              -e SPRING_DATASOURCE_PASSWORD=${{ secrets.STAGING_DB_PASS }} \
+              ${{ needs.build.outputs.image-tag }}
+            echo "✅ Deployed successfully"
+
+      - name: Smoke test staging
+        run: |
+          sleep 10
+          curl -sf ${{ vars.STAGING_URL }}/actuator/health | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); sys.exit(0 if d['status']=='UP' else 1)"
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Staging deploy failed — ${{ github.sha }}',
+              body: 'Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              labels: ['deployment', 'bug']
+            })

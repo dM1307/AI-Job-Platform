@@ -1,69 +1,92 @@
 package com.dinesh.ai_job_platform.exception;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import com.neuralhire.platform.exception.*;
+import org.junit.jupiter.api.*;
+import org.springframework.http.*;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.ServletWebRequest;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.*;
 
+/**
+ * Unit tests for GlobalExceptionHandler.
+ * Verifies that each exception type maps to the correct HTTP status
+ * and that the error response body contains required fields.
+ */
+@DisplayName("GlobalExceptionHandler — Unit Tests")
 class GlobalExceptionHandlerTest {
 
-    private MockMvc mockMvc;
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+    private ServletWebRequest request;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(new TestController())
-                .setControllerAdvice(new GlobalExceptionHandler())
-                .build();
+        var servletRequest = new MockHttpServletRequest();
+        servletRequest.setRequestURI("/api/test");
+        request = new ServletWebRequest(servletRequest);
     }
 
     @Test
-    void shouldReturnNotFoundPayload() throws Exception {
-        mockMvc.perform(get("/test/not-found"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.error").value("resume missing"))
-                .andExpect(jsonPath("$.path").value("/test/not-found"));
+    @DisplayName("handles ResourceNotFoundException → 404")
+    void notFound() {
+        var ex = new ResourceNotFoundException("Resume not found: 42");
+        var response = handler.handleNotFound(ex, request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getStatus()).isEqualTo(404);
+        assertThat(response.getBody().getMessage()).contains("42");
+        assertThat(response.getBody().getPath()).isEqualTo("/api/test");
+        assertThat(response.getBody().getTimestamp()).isNotNull();
     }
 
     @Test
-    void shouldReturnValidationErrorsWithDetails() throws Exception {
-        mockMvc.perform(post("/test/validate")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Validation failed"))
-                .andExpect(jsonPath("$.details[0]").value("name: name is required"));
+    @DisplayName("handles ResumeBadRequestException → 400")
+    void badRequest() {
+        var ex = new ResumeBadRequestException("Name must not be blank");
+        var response = handler.handleBadRequest(ex, request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody().getStatus()).isEqualTo(400);
+        assertThat(response.getBody().getMessage()).contains("Name");
     }
 
-    @RestController
-    static class TestController {
-
-        @GetMapping("/test/not-found")
-        String notFound() {
-            throw new ResourceNotFoundException("resume missing");
-        }
-
-        @PostMapping("/test/validate")
-        String validate(@Valid @RequestBody ValidationPayload payload) {
-            return payload.name;
-        }
+    @Test
+    @DisplayName("handles ResumeParseException → 422")
+    void parseError() {
+        var ex = new ResumeParseException("Failed to parse PDF");
+        var response = handler.handleParseError(ex, request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(response.getBody().getStatus()).isEqualTo(422);
     }
 
-    static class ValidationPayload {
-        @NotBlank(message = "name is required")
-        public String name;
+    @Test
+    @DisplayName("handles AiServiceUnavailableException → 503")
+    void serviceUnavailable() {
+        var ex = new AiServiceUnavailableException("OpenAI timeout");
+        var response = handler.handleAiUnavailable(ex, request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(response.getBody().getStatus()).isEqualTo(503);
+    }
+
+    @Test
+    @DisplayName("handles generic Exception → 500")
+    void internalError() {
+        var ex = new RuntimeException("Unexpected failure");
+        var response = handler.handleGeneric(ex, request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody().getStatus()).isEqualTo(500);
+    }
+
+    @Test
+    @DisplayName("error response always includes timestamp")
+    void alwaysHasTimestamp() {
+        var response = handler.handleNotFound(new ResourceNotFoundException("x"), request);
+        assertThat(response.getBody().getTimestamp()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("error response always includes path")
+    void alwaysHasPath() {
+        var response = handler.handleBadRequest(new ResumeBadRequestException("x"), request);
+        assertThat(response.getBody().getPath()).isNotBlank();
     }
 }
